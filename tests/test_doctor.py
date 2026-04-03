@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from hust_ascend_manager import doctor
 
 
@@ -20,6 +22,7 @@ def test_find_toolkit_root_prefers_vendor_env(monkeypatch, tmp_path: Path):
 
 def test_collect_runtime_lib_dirs_includes_nonstandard_layout(tmp_path: Path):
     root = tmp_path / "ascend-toolkit.bak.8.1" / "latest"
+    driver_root = tmp_path / "driver" / "lib64" / "driver"
     (root / "runtime/lib64").mkdir(parents=True)
     (root / "compiler/lib64").mkdir(parents=True)
     (root / "aarch64-linux/lib64").mkdir(parents=True)
@@ -31,6 +34,7 @@ def test_collect_runtime_lib_dirs_includes_nonstandard_layout(tmp_path: Path):
     (root / "lib64/plugin/nnengine").mkdir(parents=True)
     (root / "tools/aml/lib64").mkdir(parents=True)
     (root / "tools/aml/lib64/plugin").mkdir(parents=True)
+    driver_root.mkdir(parents=True)
     hccl_lib = root / "aarch64-linux/lib64/libhccl.so"
     hccl_lib.write_text("")
 
@@ -50,6 +54,7 @@ def test_collect_runtime_lib_dirs_includes_nonstandard_layout(tmp_path: Path):
     assert str(root / "aarch64-linux/devlib") in lib_dirs
     assert str(root / "aarch64-linux/devlib/device") in lib_dirs
     assert str(root / "opp/built-in/op_impl/ai_core/tbe/op_tiling") in lib_dirs
+    assert str(driver_root) in lib_dirs
     assert len(lib_dirs) == len(set(lib_dirs))
 
 
@@ -124,6 +129,35 @@ def test_build_env_dict_preserves_active_vendor_ld(monkeypatch, tmp_path: Path):
         env = doctor.build_env_dict(ascend_root=str(root))
 
     assert env["LD_LIBRARY_PATH"] == vendor_ld
+
+
+def test_install_conda_env_hook_writes_activate_and_deactivate_scripts(tmp_path: Path):
+    conda_prefix = tmp_path / "conda-env"
+    (conda_prefix / "conda-meta").mkdir(parents=True)
+
+    with patch("hust_ascend_manager.doctor.sys.executable", "/opt/conda/envs/test/bin/python"):
+        activate_hook, deactivate_hook = doctor.install_conda_env_hook(
+            ascend_root="/fake/ascend/latest",
+            conda_prefix=str(conda_prefix),
+        )
+
+    activate_text = activate_hook.read_text(encoding="utf-8")
+    deactivate_text = deactivate_hook.read_text(encoding="utf-8")
+
+    assert activate_hook == conda_prefix / "etc/conda/activate.d/hust-ascend-manager.sh"
+    assert deactivate_hook == conda_prefix / "etc/conda/deactivate.d/hust-ascend-manager.sh"
+    assert "-m hust_ascend_manager.cli env --shell --ascend-root /fake/ascend/latest" in activate_text
+    assert "_HUST_ASCEND_MANAGER_OLD_LD_LIBRARY_PATH_${_hust_ascend_manager_hook_level}" in activate_text
+    assert "${!_hust_ascend_manager_prev_var-__HUST_ASCEND_MANAGER_UNSET__}" in deactivate_text
+    assert 'unset "${_hust_ascend_manager_prev_var}"' in deactivate_text
+    assert "unset LD_LIBRARY_PATH" in deactivate_text
+
+
+def test_install_conda_env_hook_requires_conda_prefix(monkeypatch):
+    monkeypatch.delenv("CONDA_PREFIX", raising=False)
+    with patch("hust_ascend_manager.doctor.sys.prefix", "/non-conda"):
+        with pytest.raises(RuntimeError, match="Could not resolve a conda environment prefix"):
+            doctor.install_conda_env_hook()
 
 
 def test_collect_report_includes_manager_import_probe(tmp_path: Path):

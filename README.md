@@ -12,6 +12,7 @@ This repository isolates system-level Ascend dependency management from runtime 
 - `hust-ascend-manager doctor`
 - `hust-ascend-manager doctor --json`
 - `hust-ascend-manager env --shell`
+- `hust-ascend-manager env --install-hook`
 - `hust-ascend-manager setup --manifest manifests/euleros-910b.json --dry-run`
 - `hust-ascend-manager setup --manifest manifests/euleros-910b.json --install-python-stack`
 - `hust-ascend-manager setup --manifest manifests/euleros-910b.json --apply-system`
@@ -37,6 +38,13 @@ When a system step declares `requires_group: HwHiAiUser`, manager will run it vi
 
 `env --shell` is the source of truth for Ascend runtime exports. Runtime repos
 should consume this output instead of carrying duplicated shell logic.
+
+`env --install-hook` persists that same source of truth into the active conda
+environment by writing `etc/conda/activate.d/hust-ascend-manager.sh` and
+`etc/conda/deactivate.d/hust-ascend-manager.sh`. After that, `conda activate`
+reapplies the manager-generated Ascend environment automatically, so bare
+commands like `python -c 'import torch_npu'` or `vllm --help` do not depend on
+manual `source set_env.sh` or ad hoc shell wrappers.
 
 `runtime` is the source of truth for repairing a broken `vllm-hust` Python
 environment from adjacent runtime repos such as `vllm-hust-workstation`.

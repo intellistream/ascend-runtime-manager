@@ -8,7 +8,7 @@ from .container import DEFAULT_IMAGE
 from .container import DEFAULT_SHM_SIZE
 from .container import resolve_container_image
 from .container import run_container_action
-from .doctor import build_shell_env_exports, collect_report, print_human, print_json
+from .doctor import build_shell_env_exports, collect_report, install_conda_env_hook, print_human, print_json
 from .launch import launch_vllm
 from .runtime import check_vllm_runtime, repair_vllm_runtime
 from .setup import setup_environment
@@ -31,6 +31,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_env = sub.add_parser("env", help="Emit shell exports for a unified Ascend runtime")
     p_env.add_argument("--ascend-root", default=None, help="Explicit Ascend runtime root")
     p_env.add_argument("--shell", action="store_true", help="Emit shell export statements")
+    p_env.add_argument(
+        "--install-hook",
+        action="store_true",
+        help="Install conda activate/deactivate hooks that reapply the manager environment automatically",
+    )
+    p_env.add_argument(
+        "--conda-prefix",
+        default=None,
+        help="Explicit conda environment prefix for hook installation",
+    )
 
     p_launch = sub.add_parser("launch", help="Run vllm serve with manager-controlled Ascend env")
     p_launch.add_argument("model", help="Model ID or local model path")
@@ -123,6 +133,14 @@ def main() -> int:
         )
 
     if args.cmd == "env":
+        if args.install_hook:
+            activate_hook, deactivate_hook = install_conda_env_hook(
+                ascend_root=args.ascend_root,
+                conda_prefix=args.conda_prefix,
+            )
+            print(f"Installed activate hook: {activate_hook}")
+            print(f"Installed deactivate hook: {deactivate_hook}")
+            return 0
         exports = build_shell_env_exports(ascend_root=args.ascend_root)
         if args.shell:
             print(exports)
