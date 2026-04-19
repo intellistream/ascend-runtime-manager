@@ -41,6 +41,7 @@ def test_check_vllm_runtime_returns_failure_when_import_fails(tmp_path: Path, ca
             "tokenizers": None,
             "huggingface_hub": None,
             "cmake": None,
+            "vllm-ascend-hust": None,
             "vllm-ascend": None,
         },
         "ascend_plugin_ok": False,
@@ -91,6 +92,7 @@ def test_check_vllm_runtime_can_require_plugin(tmp_path: Path):
             "tokenizers": "0.22.0",
             "huggingface_hub": "0.36.0",
             "cmake": "3.30.0",
+            "vllm-ascend-hust": None,
             "vllm-ascend": None,
         },
         "ascend_plugin_ok": False,
@@ -116,7 +118,7 @@ def test_find_local_plugin_repo_prefers_workspace_sibling(tmp_path: Path):
     (runtime_repo / "requirements/common.txt").write_text("transformers\n", encoding="utf-8")
     plugin_repo = tmp_path / "vllm-ascend-hust"
     plugin_repo.mkdir()
-    (plugin_repo / "pyproject.toml").write_text("[project]\nname='vllm-ascend'\n", encoding="utf-8")
+    (plugin_repo / "pyproject.toml").write_text("[project]\nname='vllm-ascend-hust'\n", encoding="utf-8")
 
     assert runtime._find_local_plugin_repo(runtime_repo) == plugin_repo
 
@@ -185,7 +187,7 @@ def test_repair_vllm_runtime_installs_plugin_when_requested(tmp_path: Path):
     (tmp_path / "vllm").mkdir()
     plugin_repo = tmp_path.parent / "vllm-ascend-hust"
     plugin_repo.mkdir()
-    (plugin_repo / "pyproject.toml").write_text("[project]\nname='vllm-ascend'\n", encoding="utf-8")
+    (plugin_repo / "pyproject.toml").write_text("[project]\nname='vllm-ascend-hust'\n", encoding="utf-8")
 
     with (
         patch("hust_ascend_manager.runtime._resolve_python_bin", return_value="/usr/bin/python3"),

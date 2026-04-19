@@ -14,7 +14,7 @@ from .setup import _build_pip_install_cmd
 from .setup import _build_pip_install_env
 
 
-DEFAULT_ASCEND_PLUGIN_PACKAGE = "vllm-ascend"
+DEFAULT_ASCEND_PLUGIN_PACKAGE = "vllm-ascend-hust"
 LOCAL_ASCEND_PLUGIN_REPOS = ("vllm-ascend-hust", "vllm-ascend")
 HUGGINGFACE_HUB_SPEC = "huggingface_hub>=0.36.0,<1.0"
 
@@ -127,6 +127,7 @@ def _runtime_report(repo_dir: Path, python_bin: str, library_path: str | None) -
             "tokenizers": _package_version(python_bin, repo_dir, library_path, "tokenizers"),
             "huggingface_hub": _package_version(python_bin, repo_dir, library_path, "huggingface_hub"),
             "cmake": _package_version(python_bin, repo_dir, library_path, "cmake"),
+            "vllm-ascend-hust": _package_version(python_bin, repo_dir, library_path, "vllm-ascend-hust"),
             "vllm-ascend": _package_version(python_bin, repo_dir, library_path, "vllm-ascend"),
         },
         "ascend_plugin_ok": _check_ascend_platform_plugin(python_bin, repo_dir, library_path),

@@ -46,7 +46,7 @@ def test_runtime_repair_dispatches_plugin_options():
                 "--plugin-repo",
                 "/workspace/vllm-ascend-hust",
                 "--plugin-package",
-                "vllm-ascend==0.13.0",
+                "vllm-ascend-hust==0.13.0",
             ],
         ),
     ):
@@ -61,5 +61,5 @@ def test_runtime_repair_dispatches_plugin_options():
         skip_rebuild=False,
         install_plugin=True,
         plugin_repo="/workspace/vllm-ascend-hust",
-        plugin_package="vllm-ascend==0.13.0",
+        plugin_package="vllm-ascend-hust==0.13.0",
     )

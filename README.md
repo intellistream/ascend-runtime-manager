@@ -58,7 +58,7 @@ rebuilds editable `vllm-hust` against the currently selected Python runtime.
 When you pass `--install-plugin`, the same command also installs and verifies
 the Ascend platform plugin. It prefers a sibling local repo such as
 `vllm-ascend-hust` or `vllm-ascend` when present, and falls back to the PyPI
-package spec from `--plugin-package` or the default `vllm-ascend`.
+package spec from `--plugin-package` or the default `vllm-ascend-hust`.
 
 What `runtime repair` covers:
 

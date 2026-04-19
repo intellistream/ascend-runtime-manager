@@ -75,7 +75,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_runtime.add_argument("--skip-build-deps", action="store_true", help="Skip requirements/build.txt during repair")
     p_runtime.add_argument("--skip-rebuild", action="store_true", help="Skip editable reinstall during repair")
     p_runtime.add_argument("--install-plugin", action="store_true", help="Install and verify the Ascend platform plugin during runtime repair")
-    p_runtime.add_argument("--plugin-repo", default=None, help="Path to a local vllm-ascend repo; auto-detected when omitted")
+    p_runtime.add_argument(
+        "--plugin-repo",
+        default=None,
+        help="Path to a local vllm-ascend-hust repo; auto-detected when omitted",
+    )
     p_runtime.add_argument("--plugin-package", default=None, help="PyPI package spec for the Ascend plugin fallback")
 
     p_container = sub.add_parser("container", help="Manage the official Ascend vLLM container")
@@ -185,7 +189,7 @@ def main() -> int:
             skip_rebuild=bool(args.skip_rebuild),
             install_plugin=bool(args.install_plugin),
             plugin_repo=args.plugin_repo,
-            plugin_package=args.plugin_package or "vllm-ascend",
+            plugin_package=args.plugin_package or "vllm-ascend-hust",
         )
 
     if args.cmd == "container":
