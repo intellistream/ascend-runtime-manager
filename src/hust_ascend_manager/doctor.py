@@ -436,13 +436,17 @@ def build_env_dict(ascend_root: str | None = None) -> dict[str, str]:
     legacy_kernel_layout_issue = _detect_broken_legacy_kernel_layout(root)
     current_ld = os.getenv("LD_LIBRARY_PATH", "")
 
+    required_ld_parts = _collect_runtime_lib_dirs(root, hccl_lib)
+    if atb_lib:
+        required_ld_parts.append(atb_lib)
+
     if _has_active_vendor_ascend_env(root):
-        new_ld = current_ld
+        current_ld_parts = [item for item in current_ld.split(":") if item]
+        new_ld_parts = _dedupe_paths(current_ld_parts + required_ld_parts)
+        new_ld = ":".join(new_ld_parts)
     else:
         clean_ld = _sanitize_ld_path(current_ld)
-        new_ld_parts = _collect_runtime_lib_dirs(root, hccl_lib)
-        if atb_lib:
-            new_ld_parts.append(atb_lib)
+        new_ld_parts = list(required_ld_parts)
         if clean_ld:
             new_ld_parts.extend([item for item in clean_ld.split(":") if item])
         new_ld_parts = _dedupe_paths(new_ld_parts)

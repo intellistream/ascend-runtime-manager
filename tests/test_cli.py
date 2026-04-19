@@ -28,3 +28,38 @@ def test_env_install_hook_dispatches(capsys):
     assert rc == 0
     assert "Installed activate hook:" in captured.out
     assert "Installed deactivate hook:" in captured.out
+
+
+def test_runtime_repair_dispatches_plugin_options():
+    with (
+        patch("hust_ascend_manager.cli.repair_vllm_runtime", return_value=0) as repair_mock,
+        patch.object(
+            sys,
+            "argv",
+            [
+                "hust-ascend-manager",
+                "runtime",
+                "repair",
+                "--repo",
+                "/workspace/vllm-hust",
+                "--install-plugin",
+                "--plugin-repo",
+                "/workspace/vllm-ascend-hust",
+                "--plugin-package",
+                "vllm-ascend==0.13.0",
+            ],
+        ),
+    ):
+        rc = cli.main()
+
+    assert rc == 0
+    repair_mock.assert_called_once_with(
+        "/workspace/vllm-hust",
+        None,
+        skip_torch_install=False,
+        skip_build_deps=False,
+        skip_rebuild=False,
+        install_plugin=True,
+        plugin_repo="/workspace/vllm-ascend-hust",
+        plugin_package="vllm-ascend==0.13.0",
+    )

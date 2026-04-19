@@ -18,6 +18,7 @@ This repository isolates system-level Ascend dependency management from runtime 
 - `hust-ascend-manager setup --manifest manifests/euleros-910b.json --apply-system`
 - `hust-ascend-manager runtime check --repo /home/shuhao/vllm-hust`
 - `hust-ascend-manager runtime repair --repo /home/shuhao/vllm-hust`
+- `hust-ascend-manager runtime repair --repo /home/shuhao/vllm-hust --install-plugin`
 - `hust-ascend-manager launch Qwen/Qwen2.5-1.5B-Instruct`
 - `hust-ascend-manager container install --host-workspace-root /home/shuhao`
 - `hust-ascend-manager container shell --host-workspace-root /home/shuhao`
@@ -54,6 +55,10 @@ It checks whether the active Python can import `torch`, `transformers`,
 runtime deps, force-reinstalls the Hugging Face stack, installs build deps from
 `requirements/build.txt` without replacing the active torch wheel twice, and
 rebuilds editable `vllm-hust` against the currently selected Python runtime.
+When you pass `--install-plugin`, the same command also installs and verifies
+the Ascend platform plugin. It prefers a sibling local repo such as
+`vllm-ascend-hust` or `vllm-ascend` when present, and falls back to the PyPI
+package spec from `--plugin-package` or the default `vllm-ascend`.
 
 What `runtime repair` covers:
 
@@ -61,6 +66,7 @@ What `runtime repair` covers:
 - mismatched `transformers` / `tokenizers` / `huggingface_hub` installs
 - missing build tools from `requirements/build.txt` such as `cmake` and `ninja`
 - stale local `vllm/*.so` artifacts that need an editable reinstall against the current torch wheel
+- optional Ascend platform plugin install and entry-point verification via `--install-plugin`
 
 What still remains machine-specific or manual:
 

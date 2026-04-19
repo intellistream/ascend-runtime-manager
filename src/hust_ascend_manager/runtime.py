@@ -9,6 +9,15 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from .doctor import build_env_dict
+from .setup import _build_pip_install_cmd
+from .setup import _build_pip_install_env
+
+
+DEFAULT_ASCEND_PLUGIN_PACKAGE = "vllm-ascend"
+LOCAL_ASCEND_PLUGIN_REPOS = ("vllm-ascend-hust", "vllm-ascend")
+HUGGINGFACE_HUB_SPEC = "huggingface_hub>=0.36.0,<1.0"
+
 
 def _resolve_repo_dir(repo_dir: str | None) -> Path:
     path = Path(repo_dir or os.getcwd()).resolve()
@@ -51,12 +60,23 @@ def _expected_torch_version(machine: str | None = None) -> str:
 
 def _runtime_env(repo_dir: Path, python_bin: str, library_path: str | None) -> dict[str, str]:
     env = os.environ.copy()
+    try:
+        env.update(build_env_dict())
+    except Exception:
+        pass
     env["PYTHONNOUSERSITE"] = "1"
     env["PYTHONPATH"] = str(repo_dir) + (f":{env['PYTHONPATH']}" if env.get("PYTHONPATH") else "")
     if library_path:
         env["LD_LIBRARY_PATH"] = library_path + (f":{env['LD_LIBRARY_PATH']}" if env.get("LD_LIBRARY_PATH") else "")
     env["VLLM_HUST_PYTHON_BIN"] = python_bin
     return env
+
+
+def _merge_env(*env_layers: dict[str, str]) -> dict[str, str]:
+    merged = os.environ.copy()
+    for layer in env_layers:
+        merged.update(layer)
+    return merged
 
 
 def _run(cmd: list[str], *, cwd: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
@@ -107,7 +127,9 @@ def _runtime_report(repo_dir: Path, python_bin: str, library_path: str | None) -
             "tokenizers": _package_version(python_bin, repo_dir, library_path, "tokenizers"),
             "huggingface_hub": _package_version(python_bin, repo_dir, library_path, "huggingface_hub"),
             "cmake": _package_version(python_bin, repo_dir, library_path, "cmake"),
+            "vllm-ascend": _package_version(python_bin, repo_dir, library_path, "vllm-ascend"),
         },
+        "ascend_plugin_ok": _check_ascend_platform_plugin(python_bin, repo_dir, library_path),
         "import_ok": check.returncode == 0,
         "import_stderr": check.stderr.strip() or None,
     }
@@ -126,18 +148,119 @@ def _print_report(report: dict[str, Any], json_output: bool) -> None:
     print(f"expected_torch_version={report['expected_torch_version']}")
     for key, value in report["packages"].items():
         print(f"{key}={value or '<missing>'}")
+    print(f"ascend_plugin_ok={str(report['ascend_plugin_ok']).lower()}")
     print(f"import_ok={str(report['import_ok']).lower()}")
     if report["import_stderr"]:
         print(report["import_stderr"])
 
 
-def check_vllm_runtime(repo_dir: str | None, python_bin: str | None, json_output: bool = False) -> int:
+def check_vllm_runtime(
+    repo_dir: str | None,
+    python_bin: str | None,
+    json_output: bool = False,
+    require_plugin: bool = False,
+) -> int:
     resolved_repo = _resolve_repo_dir(repo_dir)
     resolved_python = _resolve_python_bin(python_bin)
     library_path = _python_library_path(resolved_python)
     report = _runtime_report(resolved_repo, resolved_python, library_path)
     _print_report(report, json_output=json_output)
-    return 0 if report["import_ok"] else 1
+    plugin_ok = report["ascend_plugin_ok"] or not require_plugin
+    return 0 if report["import_ok"] and plugin_ok else 1
+
+
+def _find_local_plugin_repo(repo_dir: Path) -> Path | None:
+    search_roots: list[Path] = []
+    seen: set[Path] = set()
+    for root in (repo_dir.resolve(), *repo_dir.resolve().parents, Path.cwd().resolve(), *Path.cwd().resolve().parents):
+        if root not in seen:
+            seen.add(root)
+            search_roots.append(root)
+
+    for root in search_roots:
+        for repo_name in LOCAL_ASCEND_PLUGIN_REPOS:
+            candidate = root / repo_name
+            if (candidate / "pyproject.toml").exists():
+                return candidate
+    return None
+
+
+def _resolve_plugin_repo(plugin_repo: str | None, repo_dir: Path) -> Path | None:
+    if plugin_repo:
+        candidate = Path(plugin_repo).resolve()
+        if not (candidate / "pyproject.toml").exists():
+            raise ValueError(f"Not a valid Ascend plugin repo: {candidate}")
+        return candidate
+    return _find_local_plugin_repo(repo_dir)
+
+
+def _plugin_entrypoint_check_cmd(python_bin: str) -> list[str]:
+    return [
+        python_bin,
+        "-c",
+        (
+            "from importlib.metadata import entry_points; "
+            "eps = entry_points(group='vllm.platform_plugins'); "
+            "raise SystemExit(0 if any(ep.name == 'ascend' for ep in eps) else 1)"
+        ),
+    ]
+
+
+def _check_ascend_platform_plugin(
+    python_bin: str,
+    repo_dir: Path,
+    library_path: str | None,
+) -> bool:
+    env = _runtime_env(repo_dir, python_bin, library_path)
+    proc = _run(_plugin_entrypoint_check_cmd(python_bin), cwd=repo_dir, env=env)
+    return proc.returncode == 0
+
+
+def _install_ascend_plugin(
+    python_bin: str,
+    repo_dir: Path,
+    library_path: str | None,
+    *,
+    plugin_repo: Path | None,
+    plugin_package: str,
+) -> None:
+    env = _merge_env(
+        _runtime_env(repo_dir, python_bin, library_path),
+        _build_pip_install_env(),
+    )
+
+    if plugin_repo is not None:
+        env.setdefault("COMPILE_CUSTOM_KERNELS", "0")
+        cmd = [
+            python_bin,
+            "-m",
+            "pip",
+            "install",
+            "-e",
+            str(plugin_repo),
+            "--no-build-isolation",
+            "--no-deps",
+        ]
+        subprocess.run(cmd, cwd=str(plugin_repo), env=env, check=True)
+        return
+
+    cmd = _build_pip_install_cmd([plugin_package])
+    cmd[0] = python_bin
+    subprocess.run(cmd, cwd=str(repo_dir), env=env, check=True)
+
+
+def _verify_ascend_plugin(
+    python_bin: str,
+    repo_dir: Path,
+    library_path: str | None,
+) -> None:
+    env = _runtime_env(repo_dir, python_bin, library_path)
+    subprocess.run(
+        _plugin_entrypoint_check_cmd(python_bin),
+        cwd=str(repo_dir),
+        env=env,
+        check=True,
+    )
 
 
 def _install_requirements_without_torch(python_bin: str, repo_dir: Path, library_path: str | None, requirements_path: Path) -> None:
@@ -169,11 +292,18 @@ def repair_vllm_runtime(
     skip_torch_install: bool = False,
     skip_build_deps: bool = False,
     skip_rebuild: bool = False,
+    install_plugin: bool = False,
+    plugin_repo: str | None = None,
+    plugin_package: str = DEFAULT_ASCEND_PLUGIN_PACKAGE,
 ) -> int:
     resolved_repo = _resolve_repo_dir(repo_dir)
     resolved_python = _resolve_python_bin(python_bin)
     library_path = _python_library_path(resolved_python)
     env = _runtime_env(resolved_repo, resolved_python, library_path)
+    resolved_plugin_repo = _resolve_plugin_repo(plugin_repo, resolved_repo) if install_plugin else None
+    build_env = dict(env)
+    if install_plugin:
+        build_env["VLLM_TARGET_DEVICE"] = "empty"
 
     if not skip_torch_install:
         subprocess.run(
@@ -184,7 +314,7 @@ def repair_vllm_runtime(
         )
 
     subprocess.run(
-        [resolved_python, "-m", "pip", "install", "--upgrade", "-r", "requirements/common.txt", "huggingface_hub>=0.36.0"],
+        [resolved_python, "-m", "pip", "install", "--upgrade", "-r", "requirements/common.txt", HUGGINGFACE_HUB_SPEC],
         cwd=str(resolved_repo),
         env=env,
         check=True,
@@ -197,9 +327,10 @@ def repair_vllm_runtime(
             "install",
             "--upgrade",
             "--force-reinstall",
+            "--no-deps",
             "transformers>=4.56.0,<5",
             "tokenizers>=0.21.1",
-            "huggingface_hub>=0.36.0",
+            HUGGINGFACE_HUB_SPEC,
         ],
         cwd=str(resolved_repo),
         env=env,
@@ -214,8 +345,23 @@ def repair_vllm_runtime(
         subprocess.run(
             [resolved_python, "-m", "pip", "install", "-e", str(resolved_repo), "--no-build-isolation", "--no-deps", "--force-reinstall"],
             cwd=str(resolved_repo),
-            env=env,
+            env=build_env,
             check=True,
         )
 
-    return check_vllm_runtime(str(resolved_repo), resolved_python, json_output=False)
+    if install_plugin:
+        _install_ascend_plugin(
+            resolved_python,
+            resolved_repo,
+            library_path,
+            plugin_repo=resolved_plugin_repo,
+            plugin_package=plugin_package,
+        )
+        _verify_ascend_plugin(resolved_python, resolved_repo, library_path)
+
+    return check_vllm_runtime(
+        str(resolved_repo),
+        resolved_python,
+        json_output=False,
+        require_plugin=install_plugin,
+    )

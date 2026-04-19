@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from unittest.mock import Mock
 from unittest.mock import patch
 
@@ -62,7 +63,7 @@ def test_build_pip_install_cmd_adds_retry_timeout_and_resume_flags():
         cmd = setup._build_pip_install_cmd(["torch==2.9.0"])
 
     assert cmd == [
-        "python",
+        sys.executable,
         "-m",
         "pip",
         "install",

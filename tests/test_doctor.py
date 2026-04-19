@@ -115,7 +115,7 @@ def test_build_env_dict_preserves_active_vendor_ld(monkeypatch, tmp_path: Path):
     (root / "runtime/lib64").mkdir(parents=True)
     hccl_lib = root / "runtime/lib64/libhccl.so"
     hccl_lib.write_text("")
-    vendor_ld = f"{root}/lib64:{root}/lib64/plugin/opskernel:/usr/local/Ascend/driver/lib64"
+    vendor_ld = f"{root}/runtime/lib64:{root}/lib64/plugin/opskernel:/usr/local/Ascend/driver/lib64"
 
     monkeypatch.setenv("ASCEND_HOME_PATH", str(root))
     monkeypatch.setenv("LD_LIBRARY_PATH", vendor_ld)
@@ -129,6 +129,28 @@ def test_build_env_dict_preserves_active_vendor_ld(monkeypatch, tmp_path: Path):
         env = doctor.build_env_dict(ascend_root=str(root))
 
     assert env["LD_LIBRARY_PATH"] == vendor_ld
+
+
+def test_build_env_dict_augments_active_vendor_ld_when_hccl_is_missing(monkeypatch, tmp_path: Path):
+    root = tmp_path / "cann-8.5.0"
+    (root / "runtime/lib64").mkdir(parents=True)
+    hccl_lib = root / "runtime/lib64/libhccl.so"
+    hccl_lib.write_text("")
+    vendor_ld = f"{root}/lib64:{root}/lib64/plugin/opskernel:/usr/local/Ascend/driver/lib64"
+
+    monkeypatch.setenv("ASCEND_HOME_PATH", str(root))
+    monkeypatch.setenv("LD_LIBRARY_PATH", vendor_ld)
+
+    with (
+        patch("hust_ascend_manager.doctor._find_hccl", return_value=str(hccl_lib)),
+        patch("hust_ascend_manager.doctor._ascend_has_stream_attr", return_value=True),
+        patch("hust_ascend_manager.doctor._find_atb_lib_dir", return_value=None),
+        patch("hust_ascend_manager.doctor._detect_broken_legacy_kernel_layout", return_value=None),
+    ):
+        env = doctor.build_env_dict(ascend_root=str(root))
+
+    assert env["LD_LIBRARY_PATH"].startswith(vendor_ld)
+    assert str(root / "runtime/lib64") in env["LD_LIBRARY_PATH"].split(":")
 
 
 def test_install_conda_env_hook_writes_activate_and_deactivate_scripts(tmp_path: Path):

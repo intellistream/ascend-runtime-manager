@@ -122,7 +122,7 @@ def _select_pip_index_url() -> str | None:
 
 def _pip_supports_option(option: str) -> bool:
     proc = subprocess.run(
-        ["python", "-m", "pip", "install", "--help"],
+        [sys.executable, "-m", "pip", "install", "--help"],
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
@@ -134,7 +134,7 @@ def _pip_supports_option(option: str) -> bool:
 
 def _build_pip_install_cmd(specs: list[str]) -> list[str]:
     cmd = [
-        "python",
+        sys.executable,
         "-m",
         "pip",
         "install",
