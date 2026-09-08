@@ -28,14 +28,14 @@ cmd=docker+['run','-d','--name',a.name,'--label','owner=shuhao','--label','exper
 for source in ['/usr/local/Ascend/driver/lib64','/usr/local/Ascend/driver/version.info','/usr/local/dcmi','/etc/ascend_install.info','/usr/local/sbin/npu-smi']:
  if Path(source).exists():cmd+=['-v',f'{source}:{source}:ro']
 for value in [f'LOGNAME={pwd.getpwuid(os.getuid()).pw_name}',f'USER={pwd.getpwuid(os.getuid()).pw_name}',f'ASCEND_RT_VISIBLE_DEVICES={a.device}','TORCH_DEVICE_BACKEND_AUTOLOAD=0','VLLM_CACHE_ROOT=/pilot-output/vllm-cache',
- 'HF_HOME=/pilot-output/hf-cache','XDG_CACHE_HOME=/pilot-output/cache','TORCHINDUCTOR_CACHE_DIR=/pilot-output/inductor',
+ 'HF_HOME=/pilot-output/hf-cache','XDG_CACHE_HOME=/pilot-output/cache','XDG_CONFIG_HOME=/pilot-output/config','TORCHINDUCTOR_CACHE_DIR=/pilot-output/inductor',
  'ASCEND_WORK_PATH=/pilot-output/ascend','TRITON_CACHE_DIR=/pilot-output/triton-cache','PYTHONNOUSERSITE=1']:
  cmd+=['-e',value]
 cmd+=['--entrypoint','vllm',IMAGE,'serve',str(model),'--served-model-name','Qwen2.5-7B-Instruct',
  '--host','127.0.0.1','--port',str(a.port),'--tensor-parallel-size','1','--dtype','bfloat16',
  '--max-model-len','16384','--max-num-seqs','1','--max-num-batched-tokens','16384',
  '--additional-config',json.dumps({'ascend_log_path':'/pilot-output/ascend-logs'}),
- '--gpu-memory-utilization','0.6','--enforce-eager','--no-enable-prefix-caching','--no-enable-chunked-prefill']
+ '--gpu-memory-utilization','0.6','--enforce-eager','--no-enable-prefix-caching']
 (output/'launch.json').write_text(json.dumps({'command':cmd,'script':str(Path(__file__).resolve()),'image_id':IMAGE,
  'model':str(model),'physical_npu':a.device,'uid':os.getuid(),'port':a.port,'scope':'owned service startup; no pilot inference'},indent=2)+'\n')
 result=subprocess.run(cmd,capture_output=True,text=True)
