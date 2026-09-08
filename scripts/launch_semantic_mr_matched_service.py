@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Launch one isolated, digest-pinned local pilot service with existing Docker rights."""
-import argparse,json,os,socket,subprocess,sys
+import argparse,json,os,pwd,socket,subprocess,sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
 from hust_ascend_manager.container import resolve_docker_command,discover_device_args
@@ -25,9 +25,9 @@ model=Path('/data/shared_models/Qwen2.5-7B-Instruct')
 cmd=docker+['run','-d','--name',a.name,'--label','owner=shuhao','--label','experiment=semantic-mr-bounded-pilot',
  '--user',f'{os.getuid()}:{os.getgid()}','--network','host','--shm-size','8g',*discover_device_args(),
  '-v',f'{model}:{model}:ro','-v',f'{output}:/pilot-output','--workdir','/pilot-output']
-for source in ['/usr/local/Ascend/driver/lib64','/usr/local/Ascend/driver/version.info','/usr/local/dcmi','/etc/ascend_install.info']:
+for source in ['/usr/local/Ascend/driver/lib64','/usr/local/Ascend/driver/version.info','/usr/local/dcmi','/etc/ascend_install.info','/usr/local/sbin/npu-smi']:
  if Path(source).exists():cmd+=['-v',f'{source}:{source}:ro']
-for value in [f'ASCEND_RT_VISIBLE_DEVICES={a.device}','TORCH_DEVICE_BACKEND_AUTOLOAD=0','VLLM_CACHE_ROOT=/pilot-output/vllm-cache',
+for value in [f'LOGNAME={pwd.getpwuid(os.getuid()).pw_name}',f'USER={pwd.getpwuid(os.getuid()).pw_name}',f'ASCEND_RT_VISIBLE_DEVICES={a.device}','TORCH_DEVICE_BACKEND_AUTOLOAD=0','VLLM_CACHE_ROOT=/pilot-output/vllm-cache',
  'HF_HOME=/pilot-output/hf-cache','XDG_CACHE_HOME=/pilot-output/cache','TORCHINDUCTOR_CACHE_DIR=/pilot-output/inductor',
  'ASCEND_WORK_PATH=/pilot-output/ascend','PYTHONNOUSERSITE=1']:
  cmd+=['-e',value]
