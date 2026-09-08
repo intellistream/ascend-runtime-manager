@@ -29,7 +29,7 @@ for source in ['/usr/local/Ascend/driver/lib64','/usr/local/Ascend/driver/versio
  if Path(source).exists():cmd+=['-v',f'{source}:{source}:ro']
 for value in [f'LOGNAME={pwd.getpwuid(os.getuid()).pw_name}',f'USER={pwd.getpwuid(os.getuid()).pw_name}',f'ASCEND_RT_VISIBLE_DEVICES={a.device}','TORCH_DEVICE_BACKEND_AUTOLOAD=0','VLLM_CACHE_ROOT=/pilot-output/vllm-cache',
  'HF_HOME=/pilot-output/hf-cache','XDG_CACHE_HOME=/pilot-output/cache','TORCHINDUCTOR_CACHE_DIR=/pilot-output/inductor',
- 'ASCEND_WORK_PATH=/pilot-output/ascend','PYTHONNOUSERSITE=1']:
+ 'ASCEND_WORK_PATH=/pilot-output/ascend','TRITON_CACHE_DIR=/pilot-output/triton-cache','PYTHONNOUSERSITE=1']:
  cmd+=['-e',value]
 cmd+=['--entrypoint','vllm',IMAGE,'serve',str(model),'--served-model-name','Qwen2.5-7B-Instruct',
  '--host','127.0.0.1','--port',str(a.port),'--tensor-parallel-size','1','--dtype','bfloat16',
