@@ -34,6 +34,7 @@ for value in [f'LOGNAME={pwd.getpwuid(os.getuid()).pw_name}',f'USER={pwd.getpwui
 cmd+=['--entrypoint','vllm',IMAGE,'serve',str(model),'--served-model-name','Qwen2.5-7B-Instruct',
  '--host','127.0.0.1','--port',str(a.port),'--tensor-parallel-size','1','--dtype','bfloat16',
  '--max-model-len','16384','--max-num-seqs','1','--max-num-batched-tokens','16384',
+ '--additional-config',json.dumps({'ascend_log_path':'/pilot-output/ascend-logs'}),
  '--gpu-memory-utilization','0.6','--enforce-eager','--no-enable-prefix-caching','--no-enable-chunked-prefill']
 (output/'launch.json').write_text(json.dumps({'command':cmd,'script':str(Path(__file__).resolve()),'image_id':IMAGE,
  'model':str(model),'physical_npu':a.device,'uid':os.getuid(),'port':a.port,'scope':'owned service startup; no pilot inference'},indent=2)+'\n')
