@@ -5,6 +5,7 @@ from pathlib import Path
 import signal
 import subprocess
 import time
+import threading
 
 
 def process_stat(pid):
@@ -16,15 +17,29 @@ def process_stat(pid):
 
 
 class OwnedProcess:
-    def __init__(self, name, argv, cwd, env, directory):
+    def __init__(self, name, argv, cwd, env, directory, on_stdout=None):
         self.name = name
         self.directory = Path(directory)
         self.log = (self.directory / f'{name}.log').open('wb')
         self.proc = subprocess.Popen(argv, cwd=cwd, env=env,
-                                     stdout=self.log, stderr=subprocess.STDOUT,
+                                     stdout=subprocess.PIPE if on_stdout else self.log, stderr=subprocess.STDOUT,
                                      start_new_session=True)
         self.identity = process_stat(self.proc.pid)['start_ticks']
         self.receipt('start', argv=argv, cwd=str(cwd))
+        self.reader = None
+        self.reader_errors = []
+        if on_stdout:
+            def drain():
+                for line in self.proc.stdout:
+                    self.log.write(line)
+                    self.log.flush()
+                    try:
+                        on_stdout(line)
+                    except Exception as error:
+                        self.reader_errors.append(repr(error))
+                self.proc.stdout.close()
+            self.reader = threading.Thread(target=drain, daemon=True)
+            self.reader.start()
 
     def receipt(self, action, **extra):
         with (self.directory / 'lifecycle.private.jsonl').open('a') as f:
@@ -49,5 +64,11 @@ class OwnedProcess:
             except subprocess.TimeoutExpired:
                 self.send(signal.SIGKILL)
                 self.proc.wait(timeout=5)
-        self.receipt('exit', returncode=self.proc.returncode)
+        if self.reader:
+            self.reader.join(timeout=5)
+            if self.reader.is_alive():
+                raise RuntimeError('stdout collector did not drain')
+        self.receipt('exit', returncode=self.proc.returncode, collector_errors=self.reader_errors)
         self.log.close()
+        if self.reader_errors:
+            raise RuntimeError('stdout collection failed: ' + repr(self.reader_errors))
